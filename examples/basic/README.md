@@ -1,0 +1,17 @@
+# basic
+
+Minimal update check using the faynoSync JS SDK.
+
+Demonstrates:
+
+- Creating a `Client` with only `baseURL`
+- Using `systemPlatform()` and `systemArch()` to pass Node.js runtime values
+- Distinguishing request failures (`RequestFailedError`) from validation errors
+
+## Run
+
+```sh
+npx ts-node examples/basic/index.ts
+```
+
+Expects a faynoSync server running at `http://localhost:9000`.

@@ -11,13 +11,13 @@ Node.js 18 or later.
 ## Installation
 
 ```sh
-npm install faynosync-sdk-js
+npm install @faynosync/sdk-js
 ```
 
 ## Quick Start
 
 ```ts
-import { Client } from 'faynosync-sdk-js';
+import { Client } from '@faynosync/sdk-js';
 
 const client = new Client({
   baseURL: 'https://api.example.com',
@@ -45,7 +45,7 @@ if (resp.updateAvailable) {
 ## Configuration
 
 ```ts
-import { Client } from 'faynosync-sdk-js';
+import { Client } from '@faynosync/sdk-js';
 
 const client = new Client({
   baseURL: 'https://api.example.com',
@@ -185,7 +185,7 @@ Whatever string you pass in `channel`, `platform`, and `arch` is the string sent
 The SDK provides optional helpers that return the current Node.js runtime values:
 
 ```ts
-import { systemPlatform, systemArch } from 'faynosync-sdk-js';
+import { systemPlatform, systemArch } from '@faynosync/sdk-js';
 
 const platform = systemPlatform(); // process.platform — e.g. 'darwin', 'linux', 'win32'
 const arch     = systemArch();     // process.arch    — e.g. 'arm64', 'x64'
@@ -207,7 +207,7 @@ import {
   ErrMissingOwner,
   ErrMissingAppName,
   ErrMissingVersion,
-} from 'faynosync-sdk-js';
+} from '@faynosync/sdk-js';
 
 try {
   const resp = await client.checkForUpdates(opts);

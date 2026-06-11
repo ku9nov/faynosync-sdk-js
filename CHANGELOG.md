@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+### Fixed
+
+- Normalize `-` to `.` in the edge version path segment so URLs like `2.0.0-4` resolve to the correct static response (matches Base API behavior)
+
 ## 0.2.0
 
 Initial release of the faynoSync JS SDK (transport layer only).

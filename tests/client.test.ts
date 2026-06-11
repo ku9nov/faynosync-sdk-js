@@ -82,6 +82,27 @@ describe('Client.checkForUpdates', () => {
     }
   });
 
+  it('normalizes dashes to dots in the edge version path segment', async () => {
+    const apiServer = await createTestServer((_, res) => {
+      res.writeHead(500);
+      res.end();
+    });
+
+    const edgeServer = await createTestServer((req, res) => {
+      const url = new URL(req.url!, `http://${req.headers.host}`);
+      expect(url.pathname).toBe('/responses/admin/test/nightly/darwin/arm64/2.0.0.4.json');
+      writeJSON(res, { update_available: false });
+    });
+
+    try {
+      const client = new Client({ baseURL: apiServer.url, edgeURL: edgeServer.url });
+      const resp = await client.checkForUpdates({ ...defaultOptions(), version: '2.0.0-4' });
+      expect(resp.source).toBe('edge');
+    } finally {
+      await Promise.all([apiServer.close(), edgeServer.close()]);
+    }
+  });
+
   it('sends telemetry beacon to base API after edge success', async () => {
     let apiCalled = false;
     let telemetryCalled = false;

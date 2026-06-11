@@ -156,7 +156,7 @@ export class Client {
       opts.channel ?? '',
       opts.platform ?? '',
       opts.arch ?? '',
-      `${opts.version}.json`,
+      `${opts.version.replace(/-/g, '.')}.json`,
     ];
     const base = (u.origin + u.pathname).replace(/\/+$/, '');
     return `${base}/${segments.map(encodeURIComponent).join('/')}`;

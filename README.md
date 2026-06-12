@@ -1,5 +1,7 @@
 # faynoSync JS SDK
 
+[![Website](https://img.shields.io/badge/website-faynosync.com-2563eb)](https://faynosync.com)
+
 Production-oriented JavaScript/TypeScript SDK for checking application updates with faynoSync.
 
 This package is a small typed transport and developer experience layer. It does not implement update installation, platform normalization, metadata verification, caching, or business rules.
@@ -80,6 +82,8 @@ const resp = await client.checkForUpdates({
   deviceId: 'optional-device-id',
 });
 ```
+
+The SDK only validates `owner`, `appName`, and `version` as required. `channel`, `platform`, and `arch` are not validated client-side and are sent as empty query values when omitted — but if the target app in your faynoSync instance defines channels, platforms, or architectures, you must provide the matching values or the check will not resolve to the correct release.
 
 `deviceId` is optional. When set, the SDK sends it as the `X-Device-ID` header and triggers a telemetry beacon after a successful edge response.
 
@@ -200,9 +204,8 @@ The SDK validates required fields and throws typed errors:
 ```ts
 import {
   Client,
-  RequestFailedError,
-  EndpointError,
   CheckError,
+  EndpointError,
   ErrMissingBaseURL,
   ErrMissingOwner,
   ErrMissingAppName,
@@ -220,16 +223,43 @@ try {
     // set opts.appName
   } else if (err === ErrMissingVersion) {
     // set opts.version
-  } else if (err instanceof RequestFailedError) {
-    // all endpoints failed — inspect for details
-    if (err instanceof CheckError) {
-      console.error('edge error:', err.edgeError?.message);
-      console.error('api error:', err.apiError?.message);
+  } else if (err instanceof CheckError) {
+    // every edge/api attempt failed
+    console.error('edge error:', err.edgeError?.message);
+    console.error('api error:', err.apiError?.message);
+
+    if (err.apiError instanceof EndpointError) {
+      console.error('url:', err.apiError.endpointUrl);
+      console.error('status:', err.apiError.statusCode);
     }
-    if (err instanceof EndpointError) {
-      console.error('url:', err.endpointUrl);
-      console.error('status:', err.statusCode);
-    }
+  }
+}
+```
+
+A failed update check always rejects with a `CheckError`. Its `edgeError` and `apiError` fields hold the underlying `EndpointError` for each attempt (the edge error is absent when `edgeURL` is not configured).
+
+### Error hierarchy
+
+```
+FaynoSyncError
+├── ValidationError      // ErrMissing* / ErrInvalid* singletons
+└── RequestFailedError   // base class for any failed request
+    ├── EndpointError    // a single edge/api request failed (has source, endpointUrl, statusCode)
+    └── CheckError       // checkForUpdates failed (wraps edgeError / apiError)
+```
+
+If you only need to tell a failed request apart from a bad option, catch the base `RequestFailedError`:
+
+```ts
+import { Client, RequestFailedError } from '@faynosync/sdk-js';
+
+try {
+  const resp = await client.checkForUpdates(opts);
+} catch (err) {
+  if (err instanceof RequestFailedError) {
+    console.error('update check request failed:', err.message);
+  } else {
+    console.error('invalid update check options:', (err as Error).message);
   }
 }
 ```

@@ -6,7 +6,7 @@ Demonstrates:
 
 - Creating a `Client` with only `baseURL`
 - Using `systemPlatform()` and `systemArch()` to pass Node.js runtime values
-- Distinguishing request failures (`RequestFailedError`) from validation errors
+- Distinguishing request failures (`RequestFailedError`, the base class of `CheckError`/`EndpointError`) from validation errors
 
 ## Run
 

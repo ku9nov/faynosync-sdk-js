@@ -87,6 +87,8 @@ The SDK only validates `owner`, `appName`, and `version` as required. `channel`,
 
 `deviceId` is optional. When set, the SDK sends it as the `X-Device-ID` header and triggers a telemetry beacon after a successful edge response.
 
+The SDK always uses the `manual` updater: it sends `updater=manual` on the `baseURL` API request and uses `manual` as the edge path segment. This is the native faynoSync response that carries the full metadata (`critical`, `changelog`, `is_intermediate_required`, `possible_rollback`) and the per-package URLs (`update_url_yml`, `update_url_zip`, `update_url_dmg`). Framework-specific updater modes (e.g. `electron-builder`) return their own feed format and are meant to be consumed directly by that framework — point it at the `update_url_yml` from `packageUrls` instead.
+
 An optional `AbortSignal` can be passed as the second argument to cancel the request:
 
 ```ts
@@ -149,7 +151,7 @@ An optional `AbortSignal` can be passed as the second argument to cancel the req
 The `baseURL` API request uses `GET /checkVersion`:
 
 ```
-GET /checkVersion?app_name=test&version=0.0.0.5&channel=nightly&platform=darwin&arch=arm64&owner=admin
+GET /checkVersion?app_name=test&version=0.0.0.5&channel=nightly&platform=darwin&arch=arm64&owner=admin&updater=manual
 X-Device-ID: optional
 ```
 
@@ -199,13 +201,13 @@ for (const pkg of resp.packageUrls) {
 When `edgeURL` is configured, the SDK first tries a static JSON response:
 
 ```
-GET /responses/{owner}/{appName}/{channel}/{platform}/{arch}/{version}.json
+GET /responses/{owner}/{appName}/{channel}/{platform}/{arch}/manual/{version}.json
 ```
 
-For example:
+The updater segment is always `manual`:
 
 ```
-GET /responses/admin/test/nightly/darwin/arm64/0.0.0.5.json
+GET /responses/admin/test/nightly/darwin/arm64/manual/0.0.0.5.json
 ```
 
 If the edge response succeeds with HTTP 200 and valid JSON, `resp.source` is `'edge'`.

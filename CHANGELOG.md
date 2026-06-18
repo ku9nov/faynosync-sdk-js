@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- `reportEvent` for posting failure/diagnostic reports to `POST /reports/ingest`, with typed `ReportOptions` / `ReportResponse` and gzip+base64 `details` payloads
+- Optional `deviceId` sent as `X-Device-ID`, including an edge telemetry beacon after successful edge responses
+- New validation errors: `ErrMissingReportKey`, `ErrMissingDeviceId`, `ErrMissingChannel`, `ErrMissingPlatform`, `ErrMissingArch`, `ErrInvalidEventType`, `ErrInvalidReason`
+
+
 ## 0.2.1
 
 ### Fixed

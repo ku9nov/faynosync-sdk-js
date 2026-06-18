@@ -29,6 +29,7 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const USER_AGENT = 'faynosync-js/1.0';
+const UPDATER = 'manual';
 
 export interface Config {
   readonly baseURL: string;
@@ -231,14 +232,16 @@ export class Client {
   private buildAPICheckURL(opts: CheckOptions): string {
     const u = parseAbsoluteURL(this.baseURL, ErrInvalidBaseURL);
     u.pathname = joinURLPath(u.pathname, 'checkVersion');
-    u.search = new URLSearchParams({
+    const params = new URLSearchParams({
       app_name: opts.appName,
       version: opts.version,
       channel: opts.channel ?? '',
       platform: opts.platform ?? '',
       arch: opts.arch ?? '',
       owner: opts.owner,
-    }).toString();
+      updater: UPDATER,
+    });
+    u.search = params.toString();
     return u.toString();
   }
 
@@ -251,6 +254,7 @@ export class Client {
       opts.channel ?? '',
       opts.platform ?? '',
       opts.arch ?? '',
+      UPDATER,
       `${opts.version.replace(/-/g, '.')}.json`,
     ];
     const base = (u.origin + u.pathname).replace(/\/+$/, '');

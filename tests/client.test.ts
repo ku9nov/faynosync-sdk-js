@@ -68,7 +68,7 @@ describe('Client.checkForUpdates', () => {
 
     const edgeServer = await createTestServer((req, res) => {
       const url = new URL(req.url!, `http://${req.headers.host}`);
-      expect(url.pathname).toBe('/responses/admin/test/nightly/darwin/arm64/0.0.0.5.json');
+      expect(url.pathname).toBe('/responses/admin/test/nightly/darwin/arm64/manual/0.0.0.5.json');
       writeJSON(res, { update_available: false });
     });
 
@@ -90,7 +90,7 @@ describe('Client.checkForUpdates', () => {
 
     const edgeServer = await createTestServer((req, res) => {
       const url = new URL(req.url!, `http://${req.headers.host}`);
-      expect(url.pathname).toBe('/responses/admin/test/nightly/darwin/arm64/2.0.0.4.json');
+      expect(url.pathname).toBe('/responses/admin/test/nightly/darwin/arm64/manual/2.0.0.4.json');
       writeJSON(res, { update_available: false });
     });
 
@@ -313,6 +313,42 @@ describe('Client.checkForUpdates', () => {
         platform: 'macos',
         arch: 'apple-silicon',
       });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('always uses the manual segment in the edge path', async () => {
+    const apiServer = await createTestServer((_, res) => {
+      res.writeHead(500);
+      res.end();
+    });
+
+    const edgeServer = await createTestServer((req, res) => {
+      const url = new URL(req.url!, `http://${req.headers.host}`);
+      expect(url.pathname).toBe('/responses/admin/test/nightly/darwin/arm64/manual/0.0.0.5.json');
+      writeJSON(res, { update_available: false });
+    });
+
+    try {
+      const client = new Client({ baseURL: apiServer.url, edgeURL: edgeServer.url });
+      const resp = await client.checkForUpdates(defaultOptions());
+      expect(resp.source).toBe('edge');
+    } finally {
+      await Promise.all([apiServer.close(), edgeServer.close()]);
+    }
+  });
+
+  it('always sends updater=manual query param', async () => {
+    const server = await createTestServer((req, res) => {
+      const url = new URL(req.url!, `http://${req.headers.host}`);
+      expect(url.searchParams.get('updater')).toBe('manual');
+      writeJSON(res, { update_available: false });
+    });
+
+    try {
+      const client = new Client({ baseURL: server.url });
+      await client.checkForUpdates(defaultOptions());
     } finally {
       await server.close();
     }

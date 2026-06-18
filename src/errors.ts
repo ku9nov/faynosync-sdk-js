@@ -1,4 +1,4 @@
-import type { UpdateSource } from './types';
+import type { EndpointSource } from './types';
 
 export class FaynoSyncError extends Error {
   constructor(message: string) {
@@ -23,7 +23,7 @@ export class RequestFailedError extends FaynoSyncError {
 
 export class EndpointError extends RequestFailedError {
   constructor(
-    public readonly source: UpdateSource,
+    public readonly source: EndpointSource,
     public readonly endpointUrl: string,
     public readonly statusCode?: number,
     cause?: Error,
@@ -70,3 +70,10 @@ export const ErrInvalidEdgeURL = new ValidationError('faynosync: invalid edge UR
 export const ErrMissingOwner = new ValidationError('faynosync: missing owner');
 export const ErrMissingAppName = new ValidationError('faynosync: missing app name');
 export const ErrMissingVersion = new ValidationError('faynosync: missing version');
+export const ErrMissingReportKey = new ValidationError('faynosync: missing report key');
+export const ErrMissingDeviceId = new ValidationError('faynosync: missing device id');
+export const ErrMissingChannel = new ValidationError('faynosync: missing channel');
+export const ErrMissingPlatform = new ValidationError('faynosync: missing platform');
+export const ErrMissingArch = new ValidationError('faynosync: missing arch');
+export const ErrInvalidEventType = new ValidationError('faynosync: invalid event type');
+export const ErrInvalidReason = new ValidationError('faynosync: invalid event reason');

@@ -96,6 +96,54 @@ setTimeout(() => controller.abort(), 5_000);
 const resp = await client.checkForUpdates(opts, controller.signal);
 ```
 
+## Reports
+
+`reportEvent` posts a failure or diagnostic report to `POST /reports/ingest`. The client stays stateless and app-agnostic, so `reportKey` and `deviceId` are passed per call (like `checkForUpdates`), not stored in `Config`.
+
+```ts
+const resp = await client.reportEvent({
+  reportKey: 'rpk_...',        // sent as Authorization: Bearer
+  deviceId: 'device-1',        // required, sent as X-Device-ID
+  appName: 'test',
+  version: '0.0.0.5',
+  channel: 'nightly',
+  platform: 'darwin',
+  arch: 'arm64',
+  event: { type: 'crash', reason: 'segfault.signal-11' },
+  details: { stack: '...', exitCode: 11 }, // optional raw debug object
+});
+
+console.log(resp.status, resp.groupHash, resp.storedDetails);
+```
+
+`event.type` must be one of `crash`, `startup_failure`, `update_failure`, `install_failure`, or `rollback_failure`. `event.reason` must match `^[a-zA-Z0-9._-]{1,128}$`.
+
+`reportKey`, `deviceId`, `appName`, `version`, `channel`, `platform`, and `arch` are all required and validated client-side.
+
+`details` is optional. When supplied, the SDK serializes it with `JSON.stringify`, gzip-compresses it, and base64-encodes the result. The request carries it as:
+
+```json
+{
+  "details": {
+    "encoding": "gzip+base64",
+    "content_type": "application/json",
+    "payload": "<base64(gzip(json))>"
+  }
+}
+```
+
+When `details` is omitted, the `details` field is left out of the request entirely.
+
+A successful request returns HTTP `202` with a mapped `ReportResponse`:
+
+```json
+{ "status": "accepted", "group_hash": "...", "stored_details": false }
+```
+
+Any non-`202` response rejects with an `EndpointError` whose `source` is `'report'` and `statusCode` holds the HTTP status (e.g. `401`, `403`, `429`). Network and JSON failures are wrapped in `EndpointError` as well.
+
+An optional `AbortSignal` can be passed as the second argument to cancel the request.
+
 ## Base API Request
 
 The `baseURL` API request uses `GET /checkVersion`:

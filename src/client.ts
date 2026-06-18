@@ -1,12 +1,28 @@
-import type { CheckOptions, PackageUpdateURL, UpdateResponse, UpdateSource } from './types';
+import { gzipSync } from 'node:zlib';
+import type {
+  CheckOptions,
+  PackageUpdateURL,
+  ReportEventType,
+  ReportOptions,
+  ReportResponse,
+  UpdateResponse,
+  UpdateSource,
+} from './types';
 import {
   CheckError,
   EndpointError,
   ErrInvalidBaseURL,
   ErrInvalidEdgeURL,
+  ErrInvalidEventType,
+  ErrInvalidReason,
   ErrMissingAppName,
+  ErrMissingArch,
   ErrMissingBaseURL,
+  ErrMissingChannel,
+  ErrMissingDeviceId,
   ErrMissingOwner,
+  ErrMissingPlatform,
+  ErrMissingReportKey,
   ErrMissingVersion,
   ValidationError,
 } from './errors';
@@ -30,6 +46,35 @@ interface RawUpdateResponse {
   possible_rollback?: boolean;
   [key: string]: unknown;
 }
+
+interface RawReportResponse {
+  status?: string;
+  group_hash?: string;
+  stored_details?: boolean;
+}
+
+interface ReportRequestDetails {
+  encoding: string;
+  content_type: string;
+  payload: string;
+}
+
+interface ReportRequestBody {
+  application: { name: string; version: string; channel: string };
+  system: { platform: string; arch: string };
+  event: { type: ReportEventType; reason: string };
+  details?: ReportRequestDetails;
+}
+
+const REPORT_EVENT_TYPES: readonly ReportEventType[] = [
+  'crash',
+  'startup_failure',
+  'update_failure',
+  'install_failure',
+  'rollback_failure',
+];
+
+const REPORT_REASON_PATTERN = /^[a-zA-Z0-9._-]{1,128}$/;
 
 export class Client {
   private readonly baseURL: string;
@@ -76,6 +121,56 @@ export class Client {
     } catch (apiError) {
       throw new CheckError(edgeError, apiError as Error);
     }
+  }
+
+  async reportEvent(opts: ReportOptions, signal?: AbortSignal): Promise<ReportResponse> {
+    this.validateConfig();
+    validateReportOptions(opts);
+
+    const url = this.buildReportURL();
+    const body = buildReportBody(opts);
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${opts.reportKey}`,
+      'X-Device-ID': opts.deviceId,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': USER_AGENT,
+    };
+
+    const reqSignal = createRequestSignal(signal ?? null, this.timeoutMs);
+
+    let res: Response;
+    try {
+      res = await this.fetchFn(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: reqSignal,
+      });
+    } catch (err) {
+      throw new EndpointError('report', url, undefined, err as Error);
+    }
+
+    if (res.status !== 202) {
+      await res.body?.cancel();
+      throw new EndpointError('report', url, res.status);
+    }
+
+    let raw: RawReportResponse;
+    try {
+      raw = (await res.json()) as RawReportResponse;
+    } catch (err) {
+      throw new EndpointError('report', url, undefined, err as Error);
+    }
+
+    return parseReportResponse(raw);
+  }
+
+  private buildReportURL(): string {
+    const u = parseAbsoluteURL(this.baseURL, ErrInvalidBaseURL);
+    u.pathname = joinURLPath(u.pathname, 'reports/ingest');
+    return u.toString();
   }
 
   private validateConfig(): void {
@@ -201,6 +296,45 @@ function validateCheckOptions(opts: CheckOptions): void {
   if (!opts.owner) throw ErrMissingOwner;
   if (!opts.appName) throw ErrMissingAppName;
   if (!opts.version) throw ErrMissingVersion;
+}
+
+function validateReportOptions(opts: ReportOptions): void {
+  if (!opts.reportKey) throw ErrMissingReportKey;
+  if (!opts.deviceId) throw ErrMissingDeviceId;
+  if (!opts.appName) throw ErrMissingAppName;
+  if (!opts.version) throw ErrMissingVersion;
+  if (!opts.channel) throw ErrMissingChannel;
+  if (!opts.platform) throw ErrMissingPlatform;
+  if (!opts.arch) throw ErrMissingArch;
+  if (!REPORT_EVENT_TYPES.includes(opts.event.type)) throw ErrInvalidEventType;
+  if (!REPORT_REASON_PATTERN.test(opts.event.reason)) throw ErrInvalidReason;
+}
+
+function buildReportBody(opts: ReportOptions): ReportRequestBody {
+  const body: ReportRequestBody = {
+    application: { name: opts.appName, version: opts.version, channel: opts.channel },
+    system: { platform: opts.platform, arch: opts.arch },
+    event: { type: opts.event.type, reason: opts.event.reason },
+  };
+
+  if (opts.details !== undefined) {
+    const payload = gzipSync(Buffer.from(JSON.stringify(opts.details))).toString('base64');
+    body.details = {
+      encoding: 'gzip+base64',
+      content_type: 'application/json',
+      payload,
+    };
+  }
+
+  return body;
+}
+
+function parseReportResponse(raw: RawReportResponse): ReportResponse {
+  return {
+    status: raw.status ?? '',
+    groupHash: raw.group_hash ?? '',
+    storedDetails: raw.stored_details ?? false,
+  };
 }
 
 function parseAbsoluteURL(raw: string, sentinel: ValidationError): URL {

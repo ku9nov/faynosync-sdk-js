@@ -98,6 +98,48 @@ setTimeout(() => controller.abort(), 5_000);
 const resp = await client.checkForUpdates(opts, controller.signal);
 ```
 
+## Native Updater Feeds
+
+Framework-native updaters (Squirrel.Mac, Squirrel.Windows) poll faynoSync themselves with a different `updater` value and URL shape than the SDK's `manual` check. The SDK owns that wire format so you only pick the updater.
+
+### `resolveNativeFeed` (recommended)
+
+`resolveNativeFeed` resolves the feed edge-first (falling back to the API) and tells you whether to invoke the native updater at all. When an edge response exists, the returned `feedURL` points at the CDN, so the native updater reads it directly and the API is never hit:
+
+```ts
+const feed = await client.resolveNativeFeed({
+  owner: 'admin',
+  appName: 'test',
+  version: '0.0.1',
+  channel: 'nightly',
+  platform: 'darwin',
+  arch: 'arm64',
+  updater: 'squirrel_darwin', // or 'squirrel_windows'
+});
+
+if (feed.updateAvailable) {
+  autoUpdater.setFeedURL({ url: feed.feedURL });
+  autoUpdater.checkForUpdates();
+}
+```
+
+`feed.source` is `'edge'` or `'api'`. Why this matters: Squirrel.Mac expects `200 { "url": "<zip>" }` or `204 No Content`, but the edge mirror returns `200 { "status": "no_content" }` (not 204) when there is no update, and `404` until the API has warmed that version's edge object. The SDK handles both — it reads the edge response, returns `updateAvailable: false` on `no_content` so you skip the native updater entirely, and falls back to the API (which warms the edge) on a miss. Pointing the native updater straight at the edge URL yourself would break on those cases.
+
+`squirrel_windows` is `edgeCacheable: false` (it diffs `RELEASES` itself), so `resolveNativeFeed` returns the API `feedURL` with `updateAvailable: true` without a pre-check.
+
+### `buildNativeFeedURL` (low-level)
+
+Builds just the feed URL (no request, no edge fallback) when you want to wire the native updater yourself:
+
+```ts
+const url = client.buildNativeFeedURL({ owner, appName, version, channel, platform, arch, updater: 'squirrel_darwin' });
+```
+
+- `squirrel_darwin` → `GET {baseURL}/checkVersion?...&updater=squirrel_darwin`
+- `squirrel_windows` → `{baseURL}/update/{owner}/{app}/{channel}/{platform}/{arch}/{version}`; Squirrel.Windows appends `/RELEASES` itself.
+
+For both methods `owner`, `appName`, `version`, `platform`, and `arch` are required; an unknown `updater` throws `UnsupportedUpdaterError`. The supported values are exported as `NATIVE_UPDATERS`.
+
 ## Reports
 
 `reportEvent` posts a failure or diagnostic report to `POST /reports/ingest`. The client stays stateless and app-agnostic, so `reportKey` and `deviceId` are passed per call (like `checkForUpdates`), not stored in `Config`.

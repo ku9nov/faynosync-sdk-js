@@ -64,6 +64,13 @@ export class CheckError extends RequestFailedError {
   }
 }
 
+export class UnsupportedUpdaterError extends ValidationError {
+  constructor(public readonly updater: string) {
+    super(`faynosync: unsupported updater: ${updater}`);
+    this.name = 'UnsupportedUpdaterError';
+  }
+}
+
 export const ErrMissingBaseURL = new ValidationError('faynosync: missing base URL');
 export const ErrInvalidBaseURL = new ValidationError('faynosync: invalid base URL');
 export const ErrInvalidEdgeURL = new ValidationError('faynosync: invalid edge URL');

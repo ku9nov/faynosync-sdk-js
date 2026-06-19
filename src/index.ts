@@ -3,6 +3,9 @@ export type { Config } from './client';
 export type {
   CheckOptions,
   EndpointSource,
+  NativeFeedOptions,
+  NativeFeedResult,
+  NativeUpdater,
   PackageUpdateURL,
   ReportEvent,
   ReportEventType,
@@ -11,6 +14,7 @@ export type {
   UpdateResponse,
   UpdateSource,
 } from './types';
+export { NATIVE_UPDATERS } from './feed';
 export {
   CheckError,
   EndpointError,
@@ -29,6 +33,7 @@ export {
   ErrMissingVersion,
   FaynoSyncError,
   RequestFailedError,
+  UnsupportedUpdaterError,
   ValidationError,
 } from './errors';
 export { systemArch, systemPlatform } from './system';

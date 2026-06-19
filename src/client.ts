@@ -1,6 +1,8 @@
 import { gzipSync } from 'node:zlib';
 import type {
   CheckOptions,
+  NativeFeedOptions,
+  NativeFeedResult,
   PackageUpdateURL,
   ReportEventType,
   ReportOptions,
@@ -8,6 +10,12 @@ import type {
   UpdateResponse,
   UpdateSource,
 } from './types';
+import {
+  buildCheckVersionURL,
+  buildNativeFeedURL as buildNativeFeedURLFor,
+  isEdgeCacheableUpdater,
+} from './feed';
+import { joinURLPath, parseAbsoluteURL } from './url';
 import {
   CheckError,
   EndpointError,
@@ -24,7 +32,6 @@ import {
   ErrMissingPlatform,
   ErrMissingReportKey,
   ErrMissingVersion,
-  ValidationError,
 } from './errors';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -229,23 +236,83 @@ export class Client {
     return parseUpdateResponse(raw);
   }
 
+  buildNativeFeedURL(opts: NativeFeedOptions): string {
+    this.validateConfig();
+    return buildNativeFeedURLFor(this.baseURL, opts);
+  }
+
+  async resolveNativeFeed(opts: NativeFeedOptions, signal?: AbortSignal): Promise<NativeFeedResult> {
+    this.validateConfig();
+    const apiURL = this.buildNativeFeedURL(opts);
+    const sig = signal ?? null;
+
+    if (!isEdgeCacheableUpdater(opts.updater)) {
+      // updatePath-style feed (Squirrel.Windows): the framework diffs RELEASES itself,
+      // so we can't pre-check and just hand it the API endpoint.
+      return { updateAvailable: true, feedURL: apiURL, source: 'api' };
+    }
+
+    if (this.edgeURL !== '') {
+      const edgeURL = this.buildEdgeResponseURL(opts, opts.updater);
+      try {
+        const r = await this.fetchNativeFeed(edgeURL, 'edge', sig);
+        return { ...r, feedURL: edgeURL, source: 'edge' };
+      } catch {
+        // edge miss/error -> fall back to the API feed
+      }
+    }
+
+    const r = await this.fetchNativeFeed(apiURL, 'api', sig);
+    return { ...r, feedURL: apiURL, source: 'api' };
+  }
+
+  private async fetchNativeFeed(
+    url: string,
+    source: UpdateSource,
+    signal: AbortSignal | null,
+  ): Promise<{ updateAvailable: boolean; url?: string }> {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'User-Agent': USER_AGENT,
+    };
+    const reqSignal = createRequestSignal(signal, this.timeoutMs);
+
+    let res: Response;
+    try {
+      res = await this.fetchFn(url, { headers, signal: reqSignal });
+    } catch (err) {
+      throw new EndpointError(source, url, undefined, err as Error);
+    }
+
+    if (res.status === 204) {
+      await res.body?.cancel();
+      return { updateAvailable: false };
+    }
+    if (res.status !== 200) {
+      await res.body?.cancel();
+      throw new EndpointError(source, url, res.status);
+    }
+
+    let raw: { url?: unknown };
+    try {
+      raw = (await res.json()) as { url?: unknown };
+    } catch (err) {
+      throw new EndpointError(source, url, undefined, err as Error);
+    }
+
+    const feedUrl = typeof raw.url === 'string' ? raw.url : undefined;
+    return { updateAvailable: feedUrl !== undefined, url: feedUrl };
+  }
+
   private buildAPICheckURL(opts: CheckOptions): string {
-    const u = parseAbsoluteURL(this.baseURL, ErrInvalidBaseURL);
-    u.pathname = joinURLPath(u.pathname, 'checkVersion');
-    const params = new URLSearchParams({
-      app_name: opts.appName,
-      version: opts.version,
-      channel: opts.channel ?? '',
-      platform: opts.platform ?? '',
-      arch: opts.arch ?? '',
-      owner: opts.owner,
-      updater: UPDATER,
-    });
-    u.search = params.toString();
-    return u.toString();
+    return buildCheckVersionURL(this.baseURL, opts, UPDATER);
   }
 
   private buildEdgeCheckURL(opts: CheckOptions): string {
+    return this.buildEdgeResponseURL(opts, UPDATER);
+  }
+
+  private buildEdgeResponseURL(opts: CheckOptions, updater: string): string {
     const u = parseAbsoluteURL(this.edgeURL, ErrInvalidEdgeURL);
     const segments = [
       'responses',
@@ -254,7 +321,7 @@ export class Client {
       opts.channel ?? '',
       opts.platform ?? '',
       opts.arch ?? '',
-      UPDATER,
+      updater,
       `${opts.version.replace(/-/g, '.')}.json`,
     ];
     const base = (u.origin + u.pathname).replace(/\/+$/, '');
@@ -339,26 +406,6 @@ function parseReportResponse(raw: RawReportResponse): ReportResponse {
     groupHash: raw.group_hash ?? '',
     storedDetails: raw.stored_details ?? false,
   };
-}
-
-function parseAbsoluteURL(raw: string, sentinel: ValidationError): URL {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    throw sentinel;
-  }
-  if (!u.protocol || !u.hostname) {
-    throw sentinel;
-  }
-  return u;
-}
-
-function joinURLPath(basePath: string, segment: string): string {
-  if (basePath === '' || basePath === '/') {
-    return `/${segment}`;
-  }
-  return `${basePath.replace(/\/+$/, '')}/${segment}`;
 }
 
 function createRequestSignal(userSignal: AbortSignal | null, timeoutMs: number): AbortSignal {

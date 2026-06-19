@@ -17,6 +17,21 @@ export interface CheckOptions {
   readonly deviceId?: string;
 }
 
+export type NativeUpdater = 'squirrel_darwin' | 'squirrel_windows';
+
+export interface NativeFeedOptions extends CheckOptions {
+  readonly updater: NativeUpdater;
+}
+
+export interface NativeFeedResult {
+  readonly updateAvailable: boolean;
+  // URL to hand to the native updater (autoUpdater.setFeedURL): the edge object when
+  // it served the feed, otherwise the API endpoint.
+  readonly feedURL: string;
+  readonly source: UpdateSource;
+  readonly url?: string;
+}
+
 export interface UpdateResponse {
   readonly updateAvailable: boolean;
   readonly updateUrl: string;

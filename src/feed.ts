@@ -50,20 +50,25 @@ function updatePathFeed(baseURL: string, opts: NativeFeedOptions): string {
   return `${base}/${segments.map(encodeURIComponent).join('/')}`;
 }
 
+// How the native framework consumes the resolved feed:
+//  'json'        -> the framework reads the JSON feed at feedURL directly (Squirrel.Mac).
+//  'releasesDir' -> the framework reads `feedURL/RELEASES` (Squirrel.Windows). The resolved
+//                   response carries the RELEASES URL, so feedURL is its parent directory.
+export type NativeFeedKind = 'json' | 'releasesDir';
+
 interface NativeUpdaterSpec {
   readonly buildFeedURL: NativeFeedURLBuilder;
-  // edgeCacheable: the updater polls a /checkVersion-style JSON feed, so the server
-  // mirrors its response to `responses/.../{updater}/{version}.json` on the edge and
-  // resolveNativeFeed can serve it from there. updatePath-style feeds cannot.
+  // edgeCacheable: the server mirrors the /checkVersion response to
+  // `responses/.../{updater}/{version}.json` on the edge, so resolveNativeFeed can serve
+  // the feed from there instead of hitting the API.
   readonly edgeCacheable: boolean;
+  readonly feedKind: NativeFeedKind;
 }
 
-// Extension point: register a new native updater here. Most updaters reuse
-// `checkVersionFeed` + `edgeCacheable: true`; add a new builder only when the
-// framework expects a different URL shape.
+// Extension point: register a new native updater here.
 const NATIVE_UPDATER_SPECS: Record<NativeUpdater, NativeUpdaterSpec> = {
-  squirrel_darwin: { buildFeedURL: checkVersionFeed, edgeCacheable: true },
-  squirrel_windows: { buildFeedURL: updatePathFeed, edgeCacheable: false },
+  squirrel_darwin: { buildFeedURL: checkVersionFeed, edgeCacheable: true, feedKind: 'json' },
+  squirrel_windows: { buildFeedURL: updatePathFeed, edgeCacheable: true, feedKind: 'releasesDir' },
 };
 
 export const NATIVE_UPDATERS = Object.keys(NATIVE_UPDATER_SPECS) as readonly NativeUpdater[];
@@ -78,6 +83,16 @@ function getSpec(updater: NativeUpdater): NativeUpdaterSpec {
 
 export function isEdgeCacheableUpdater(updater: NativeUpdater): boolean {
   return getSpec(updater).edgeCacheable;
+}
+
+export function nativeFeedKind(updater: NativeUpdater): NativeFeedKind {
+  return getSpec(updater).feedKind;
+}
+
+// Squirrel.Windows appends `/RELEASES` to the feed URL itself, so a resolved RELEASES URL
+// must be reduced to its parent directory before being handed back.
+export function stripReleasesSuffix(url: string): string {
+  return url.replace(/\/RELEASES\/?$/i, '');
 }
 
 function validateNativeFeedOptions(opts: NativeFeedOptions): void {

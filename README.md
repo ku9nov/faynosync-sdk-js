@@ -125,7 +125,10 @@ if (feed.updateAvailable) {
 
 `feed.source` is `'edge'` or `'api'`. Why this matters: Squirrel.Mac expects `200 { "url": "<zip>" }` or `204 No Content`, but the edge mirror returns `200 { "status": "no_content" }` (not 204) when there is no update, and `404` until the API has warmed that version's edge object. The SDK handles both — it reads the edge response, returns `updateAvailable: false` on `no_content` so you skip the native updater entirely, and falls back to the API (which warms the edge) on a miss. Pointing the native updater straight at the edge URL yourself would break on those cases.
 
-`squirrel_windows` is `edgeCacheable: false` (it diffs `RELEASES` itself), so `resolveNativeFeed` returns the API `feedURL` with `updateAvailable: true` without a pre-check.
+`feed.feedURL` is what to pass to `setFeedURL`, and it differs by framework:
+
+- `squirrel_darwin` reads the JSON feed directly, so `feedURL` is the edge object (or the API `/checkVersion` URL on a miss).
+- `squirrel_windows` reads `feedURL/RELEASES`, so the SDK resolves the edge response (`{ "status": "redirect", "url": "<.../RELEASES>" }`), strips the trailing `/RELEASES`, and returns the **directory** as `feedURL` — pointing Squirrel.Windows straight at the CDN where `RELEASES` and the `.nupkg` live. On an edge miss it falls back to the API `/update/...` base (which serves `RELEASES` and warms the edge). `feed.url` carries the raw resolved resource (the `.zip` for darwin, the `RELEASES` URL for windows).
 
 ### `buildNativeFeedURL` (low-level)
 

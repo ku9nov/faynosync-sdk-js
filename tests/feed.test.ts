@@ -160,16 +160,47 @@ describe('Client.resolveNativeFeed', () => {
     }
   });
 
-  it('does not pre-check updatePath updaters (squirrel_windows)', async () => {
-    let called = false;
+  it('resolves squirrel_windows from the edge to the RELEASES directory (no /RELEASES suffix)', async () => {
+    let apiCalled = false;
     const apiServer = await createTestServer((_, res) => {
-      called = true;
+      apiCalled = true;
+      res.writeHead(500);
+      res.end();
+    });
+    const releasesURL =
+      'https://cdn.example/squirrel_windows/demo-admin/0.0.2/nightly/win32/x64/RELEASES';
+    const edgeServer = await createTestServer((req, res) => {
+      const url = new URL(req.url!, `http://${req.headers.host}`);
+      expect(url.pathname).toBe(
+        '/responses/admin/demo/nightly/win32/x64/squirrel_windows/0.0.1.json',
+      );
+      writeJSON(res, { status: 'redirect', url: releasesURL });
+    });
+
+    try {
+      const client = new Client({ baseURL: apiServer.url, edgeURL: edgeServer.url });
+      const feed = await client.resolveNativeFeed(
+        feedOptions({ updater: 'squirrel_windows', platform: 'win32', arch: 'x64' }),
+      );
+      expect(feed.updateAvailable).toBe(true);
+      expect(feed.source).toBe('edge');
+      expect(feed.url).toBe(releasesURL);
+      expect(feed.feedURL).toBe(
+        'https://cdn.example/squirrel_windows/demo-admin/0.0.2/nightly/win32/x64',
+      );
+      expect(apiCalled).toBe(false);
+    } finally {
+      await Promise.all([apiServer.close(), edgeServer.close()]);
+    }
+  });
+
+  it('falls back to the /update base for squirrel_windows when the edge is cold', async () => {
+    const apiServer = await createTestServer((_, res) => {
       res.writeHead(500);
       res.end();
     });
     const edgeServer = await createTestServer((_, res) => {
-      called = true;
-      res.writeHead(500);
+      res.writeHead(404);
       res.end();
     });
 
@@ -181,9 +212,30 @@ describe('Client.resolveNativeFeed', () => {
       expect(feed.updateAvailable).toBe(true);
       expect(feed.source).toBe('api');
       expect(feed.feedURL).toBe(`${apiServer.url}/update/admin/demo/nightly/win32/x64/0.0.1`);
-      expect(called).toBe(false);
     } finally {
       await Promise.all([apiServer.close(), edgeServer.close()]);
+    }
+  });
+
+  it('returns the /update base for squirrel_windows without an edge URL and no network', async () => {
+    let called = false;
+    const apiServer = await createTestServer((_, res) => {
+      called = true;
+      res.writeHead(500);
+      res.end();
+    });
+
+    try {
+      const client = new Client({ baseURL: apiServer.url });
+      const feed = await client.resolveNativeFeed(
+        feedOptions({ updater: 'squirrel_windows', platform: 'win32', arch: 'x64' }),
+      );
+      expect(feed.updateAvailable).toBe(true);
+      expect(feed.source).toBe('api');
+      expect(feed.feedURL).toBe(`${apiServer.url}/update/admin/demo/nightly/win32/x64/0.0.1`);
+      expect(called).toBe(false);
+    } finally {
+      await apiServer.close();
     }
   });
 });

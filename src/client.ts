@@ -14,6 +14,9 @@ import {
   buildCheckVersionURL,
   buildNativeFeedURL as buildNativeFeedURLFor,
   isEdgeCacheableUpdater,
+  nativeFeedKind,
+  stripReleasesSuffix,
+  type NativeFeedKind,
 } from './feed';
 import { joinURLPath, parseAbsoluteURL } from './url';
 import {
@@ -243,27 +246,28 @@ export class Client {
 
   async resolveNativeFeed(opts: NativeFeedOptions, signal?: AbortSignal): Promise<NativeFeedResult> {
     this.validateConfig();
-    const apiURL = this.buildNativeFeedURL(opts);
+    const directURL = this.buildNativeFeedURL(opts);
     const sig = signal ?? null;
+    const kind = nativeFeedKind(opts.updater);
 
-    if (!isEdgeCacheableUpdater(opts.updater)) {
-      // updatePath-style feed (Squirrel.Windows): the framework diffs RELEASES itself,
-      // so we can't pre-check and just hand it the API endpoint.
-      return { updateAvailable: true, feedURL: apiURL, source: 'api' };
-    }
-
-    if (this.edgeURL !== '') {
+    if (isEdgeCacheableUpdater(opts.updater) && this.edgeURL !== '') {
       const edgeURL = this.buildEdgeResponseURL(opts, opts.updater);
       try {
         const r = await this.fetchNativeFeed(edgeURL, 'edge', sig);
-        return { ...r, feedURL: edgeURL, source: 'edge' };
+        return toNativeFeedResult(kind, r, edgeURL, directURL, 'edge');
       } catch {
         // edge miss/error -> fall back to the API feed
       }
     }
 
-    const r = await this.fetchNativeFeed(apiURL, 'api', sig);
-    return { ...r, feedURL: apiURL, source: 'api' };
+    if (kind === 'releasesDir') {
+      // The /update base serves RELEASES (with absolute package URLs) and warms the edge;
+      // Squirrel.Windows diffs RELEASES itself, so no pre-check is needed.
+      return { updateAvailable: true, feedURL: directURL, source: 'api' };
+    }
+
+    const r = await this.fetchNativeFeed(directURL, 'api', sig);
+    return toNativeFeedResult(kind, r, directURL, directURL, 'api');
   }
 
   private async fetchNativeFeed(
@@ -406,6 +410,23 @@ function parseReportResponse(raw: RawReportResponse): ReportResponse {
     groupHash: raw.group_hash ?? '',
     storedDetails: raw.stored_details ?? false,
   };
+}
+
+function toNativeFeedResult(
+  kind: NativeFeedKind,
+  r: { updateAvailable: boolean; url?: string },
+  jsonFeedURL: string,
+  releasesDirFallback: string,
+  source: UpdateSource,
+): NativeFeedResult {
+  if (kind === 'releasesDir') {
+    if (r.updateAvailable && r.url !== undefined) {
+      return { updateAvailable: true, feedURL: stripReleasesSuffix(r.url), source, url: r.url };
+    }
+    return { updateAvailable: false, feedURL: releasesDirFallback, source };
+  }
+  // 'json' — the framework reads the JSON feed at jsonFeedURL directly
+  return { updateAvailable: r.updateAvailable, feedURL: jsonFeedURL, source, url: r.url };
 }
 
 function createRequestSignal(userSignal: AbortSignal | null, timeoutMs: number): AbortSignal {

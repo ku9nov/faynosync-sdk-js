@@ -1,11 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+### Added
+
+- `Client.resolveNativeFeed` to resolve a native updater feed edge-first with API fallback, returning `NativeFeedResult` (`updateAvailable`, `feedURL`, `source`, `url`) so callers skip the native updater on no-update and keep the API offloaded when the edge is warm. `squirrel_windows` is edge-served too: the SDK reads the edge redirect response and returns the CDN `RELEASES` directory (trailing `/RELEASES` stripped) as `feedURL`, falling back to the API `/update/...` base on a miss
+
 ## 0.4.0
 
 ### Added
 
 - `Client.buildNativeFeedURL` to build framework-native updater feed URLs (`squirrel_darwin`, `squirrel_windows`), with typed `NativeFeedOptions` / `NativeUpdater`, the `NATIVE_UPDATERS` list, and `UnsupportedUpdaterError`
-- `Client.resolveNativeFeed` to resolve a native updater feed edge-first with API fallback, returning `NativeFeedResult` (`updateAvailable`, `feedURL`, `source`, `url`) so callers skip the native updater on no-update and keep the API offloaded when the edge is warm
 
 ## 0.3.0
 

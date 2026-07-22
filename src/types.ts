@@ -32,6 +32,15 @@ export interface NativeFeedResult {
   readonly url?: string;
 }
 
+export interface RolloutInfo {
+  readonly percent: number;
+  readonly seed: string;
+  // Deterministic bucket in [0, 99] for this device, or null when no deviceId was
+  // supplied and the bucket could not be computed.
+  readonly bucket: number | null;
+  readonly eligible: boolean;
+}
+
 export interface UpdateResponse {
   readonly updateAvailable: boolean;
   readonly updateUrl: string;
@@ -41,6 +50,9 @@ export interface UpdateResponse {
   readonly possibleRollback: boolean;
   readonly packageUrls: readonly PackageUpdateURL[];
   readonly source: UpdateSource;
+  // Present only when the server offered a staged (canary) rollout for the version.
+  // When `eligible` is false the SDK has already forced `updateAvailable` to false.
+  readonly rollout?: RolloutInfo;
 }
 
 export type ReportEventType =

@@ -11,10 +11,12 @@ export type {
   ReportEventType,
   ReportOptions,
   ReportResponse,
+  RolloutInfo,
   UpdateResponse,
   UpdateSource,
 } from './types';
 export { NATIVE_UPDATERS } from './feed';
+export { rolloutBucket } from './rollout';
 export {
   CheckError,
   EndpointError,

@@ -403,6 +403,82 @@ describe('Client.checkForUpdates', () => {
     }
   });
 
+  describe('staged rollout', () => {
+    const SEED = 'badadc23b08e3943';
+
+    function rolloutServer(): Promise<import('./helpers').TestServer> {
+      return createTestServer((_, res) => {
+        writeJSON(res, {
+          update_available: true,
+          update_url: 'https://downloads.example/app',
+          rollout: { percent: 20, seed: SEED },
+        });
+      });
+    }
+
+    it('keeps the update when the device is inside the rollout bucket', async () => {
+      const server = await rolloutServer();
+      try {
+        const client = new Client({ baseURL: server.url });
+        const resp = await client.checkForUpdates({ ...defaultOptions(), deviceId: 'device-1' });
+        expect(resp.updateAvailable).toBe(true);
+        expect(resp.updateUrl).toBe('https://downloads.example/app');
+        expect(resp.rollout).toEqual({ percent: 20, seed: SEED, bucket: 18, eligible: true });
+      } finally {
+        await server.close();
+      }
+    });
+
+    it('gates the update and blanks the URLs when outside the rollout bucket', async () => {
+      const server = await createTestServer((_, res) => {
+        writeJSON(res, {
+          update_available: true,
+          update_url: 'https://downloads.example/app',
+          update_url_dmg: 'https://downloads.example/app.dmg',
+          rollout: { percent: 20, seed: SEED },
+        });
+      });
+      try {
+        const client = new Client({ baseURL: server.url });
+        const resp = await client.checkForUpdates({ ...defaultOptions(), deviceId: 'device-2' });
+        expect(resp.updateAvailable).toBe(false);
+        expect(resp.updateUrl).toBe('');
+        expect(resp.packageUrls).toEqual([]);
+        expect(resp.rollout).toEqual({ percent: 20, seed: SEED, bucket: 22, eligible: false });
+      } finally {
+        await server.close();
+      }
+    });
+
+    it('gates the update and blanks the URLs when no deviceId is supplied', async () => {
+      const server = await rolloutServer();
+      try {
+        const client = new Client({ baseURL: server.url });
+        const resp = await client.checkForUpdates(defaultOptions());
+        expect(resp.updateAvailable).toBe(false);
+        expect(resp.updateUrl).toBe('');
+        expect(resp.packageUrls).toEqual([]);
+        expect(resp.rollout).toEqual({ percent: 20, seed: SEED, bucket: null, eligible: false });
+      } finally {
+        await server.close();
+      }
+    });
+
+    it('leaves the response untouched when no rollout is present', async () => {
+      const server = await createTestServer((_, res) => {
+        writeJSON(res, { update_available: true, update_url: 'https://downloads.example/app' });
+      });
+      try {
+        const client = new Client({ baseURL: server.url });
+        const resp = await client.checkForUpdates({ ...defaultOptions(), deviceId: 'device-2' });
+        expect(resp.updateAvailable).toBe(true);
+        expect(resp.rollout).toBeUndefined();
+      } finally {
+        await server.close();
+      }
+    });
+  });
+
   describe('input validation', () => {
     it.each<{ name: string; baseURL: string; opts: CheckOptions; want: Error }>([
       {

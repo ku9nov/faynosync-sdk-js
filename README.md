@@ -98,6 +98,39 @@ setTimeout(() => controller.abort(), 5_000);
 const resp = await client.checkForUpdates(opts, controller.signal);
 ```
 
+## Staged Rollout
+
+faynoSync can ship a version to a controlled percentage of the fleet first (a staged/canary rollout). When the offered version's rollout is below 100%, `/checkVersion` includes a `rollout` object and the SDK decides — client-side — whether this install is included:
+
+```json
+{
+  "update_available": true,
+  "update_url": "https://downloads.example.com/app",
+  "rollout": { "percent": 20, "seed": "badadc23b08e3943" }
+}
+```
+
+The decision is deterministic and sticky, using the reference algorithm shared by every faynoSync SDK:
+
+```text
+bucket = sha256(deviceId + ":" + seed) → first 8 bytes, big-endian uint64, % 100
+included if bucket < rollout.percent
+```
+
+When the install is **not** in the bucket, the SDK forces `updateAvailable` to `false` **and blanks `updateUrl`/`packageUrls`** — so a caller that inspects the URLs instead of `updateAvailable` still cannot pull an update the device was not offered. The `rollout` object on the response exposes the decision for logging:
+
+```ts
+const resp = await client.checkForUpdates({ ...opts, deviceId: 'stable-device-id' });
+
+if (resp.rollout) {
+  console.log(resp.rollout.percent, resp.rollout.bucket, resp.rollout.eligible);
+}
+```
+
+`deviceId` is required to participate: it must be the same stable value used for telemetry (`X-Device-ID`). Without it the bucket cannot be computed, so the install stays out of the rollout (`eligible: false`, `bucket: null`) until a `deviceId` is provided. Raising the percentage on the same version only ever adds installs — an install in the 20% bucket stays in when you move to 50%. Rollout works identically in edge/CDN mode, since the same JSON body is served from the cached manifest.
+
+The `rolloutBucket(deviceId, seed)` helper is exported if you need to compute a bucket yourself.
+
 ## Native Updater Feeds
 
 Framework-native updaters (Squirrel.Mac, Squirrel.Windows) poll faynoSync themselves with a different `updater` value and URL shape than the SDK's `manual` check. The SDK owns that wire format so you only pick the updater.
@@ -224,6 +257,8 @@ It may also return package-specific URLs with dynamic field names:
   "possible_rollback": true
 }
 ```
+
+When a version is under a staged rollout, the response also carries a `rollout` object (`{ percent, seed }`), decoded into `resp.rollout` — see [Staged Rollout](#staged-rollout).
 
 The SDK decodes these into a typed `UpdateResponse`:
 

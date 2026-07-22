@@ -7,9 +7,11 @@ import type {
   ReportEventType,
   ReportOptions,
   ReportResponse,
+  RolloutInfo,
   UpdateResponse,
   UpdateSource,
 } from './types';
+import { evaluateRollout } from './rollout';
 import {
   buildCheckVersionURL,
   buildNativeFeedURL as buildNativeFeedURLFor,
@@ -55,6 +57,7 @@ interface RawUpdateResponse {
   critical?: boolean;
   is_intermediate_required?: boolean;
   possible_rollback?: boolean;
+  rollout?: { percent?: number; seed?: string };
   [key: string]: unknown;
 }
 
@@ -236,7 +239,7 @@ export class Client {
       throw new EndpointError(source, url, undefined, err as Error);
     }
 
-    return parseUpdateResponse(raw);
+    return parseUpdateResponse(raw, deviceId);
   }
 
   buildNativeFeedURL(opts: NativeFeedOptions): string {
@@ -446,7 +449,10 @@ function createRequestSignal(userSignal: AbortSignal | null, timeoutMs: number):
   return controller.signal;
 }
 
-function parseUpdateResponse(raw: RawUpdateResponse): UpdateResponse {
+function parseUpdateResponse(
+  raw: RawUpdateResponse,
+  deviceId: string | undefined,
+): UpdateResponse {
   const packageUrls: PackageUpdateURL[] = [];
 
   for (const [key, value] of Object.entries(raw)) {
@@ -457,14 +463,31 @@ function parseUpdateResponse(raw: RawUpdateResponse): UpdateResponse {
 
   packageUrls.sort((a, b) => a.package.localeCompare(b.package));
 
+  let updateAvailable = raw.update_available ?? false;
+  let rollout: RolloutInfo | undefined;
+  let gated = false;
+
+  const rawRollout = raw.rollout;
+  if (rawRollout && typeof rawRollout.percent === 'number' && typeof rawRollout.seed === 'string') {
+    rollout = evaluateRollout(rawRollout.percent, rawRollout.seed, deviceId);
+    if (updateAvailable && !rollout.eligible) {
+      updateAvailable = false;
+      gated = true;
+    }
+  }
+
+  // When the rollout excludes this install we blank the download URLs too, so a caller
+  // that inspects `updateUrl`/`packageUrls` instead of `updateAvailable` cannot bypass
+  // the gate and pull an update the device was not offered.
   return {
-    updateAvailable: raw.update_available ?? false,
-    updateUrl: raw.update_url ?? '',
+    updateAvailable,
+    updateUrl: gated ? '' : raw.update_url ?? '',
     changelog: raw.changelog ?? '',
     critical: raw.critical ?? false,
     isIntermediateRequired: raw.is_intermediate_required ?? false,
     possibleRollback: raw.possible_rollback ?? false,
-    packageUrls,
+    packageUrls: gated ? [] : packageUrls,
     source: 'unknown',
+    rollout,
   };
 }

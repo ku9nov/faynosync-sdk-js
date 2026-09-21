@@ -43,6 +43,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const USER_AGENT = 'faynosync-js/1.0';
 const UPDATER = 'manual';
 
+export const DOWNLOAD_TOKEN_HEADER = 'X-Download-Token';
+
 export interface Config {
   readonly baseURL: string;
   readonly edgeURL?: string;
@@ -110,7 +112,8 @@ export class Client {
     const sig = signal ?? null;
     let edgeError: Error | undefined;
 
-    if (this.edgeURL !== '') {
+    // A private app is never published to the edge, so with a token the lookup could only miss.
+    if (this.edgeURL !== '' && !opts.downloadToken) {
       try {
         const resp = await this.checkEdge(opts, sig);
         if (opts.deviceId) {
@@ -196,17 +199,17 @@ export class Client {
 
   private async checkEdge(opts: CheckOptions, signal: AbortSignal | null): Promise<UpdateResponse> {
     const url = this.buildEdgeCheckURL(opts);
-    return this.doUpdateRequest(url, opts.deviceId, 'edge', signal);
+    return this.doUpdateRequest(url, opts, 'edge', signal);
   }
 
   private async checkAPI(opts: CheckOptions, signal: AbortSignal | null): Promise<UpdateResponse> {
     const url = this.buildAPICheckURL(opts);
-    return this.doUpdateRequest(url, opts.deviceId, 'api', signal);
+    return this.doUpdateRequest(url, opts, 'api', signal);
   }
 
   private async doUpdateRequest(
     url: string,
-    deviceId: string | undefined,
+    opts: CheckOptions,
     source: UpdateSource,
     signal: AbortSignal | null,
   ): Promise<UpdateResponse> {
@@ -214,8 +217,11 @@ export class Client {
       Accept: 'application/json',
       'User-Agent': USER_AGENT,
     };
-    if (deviceId) {
-      headers['X-Device-ID'] = deviceId;
+    if (opts.deviceId) {
+      headers['X-Device-ID'] = opts.deviceId;
+    }
+    if (opts.downloadToken) {
+      headers[DOWNLOAD_TOKEN_HEADER] = opts.downloadToken;
     }
 
     const reqSignal = createRequestSignal(signal, this.timeoutMs);
@@ -239,7 +245,7 @@ export class Client {
       throw new EndpointError(source, url, undefined, err as Error);
     }
 
-    return parseUpdateResponse(raw, deviceId);
+    return parseUpdateResponse(raw, opts.deviceId);
   }
 
   buildNativeFeedURL(opts: NativeFeedOptions): string {

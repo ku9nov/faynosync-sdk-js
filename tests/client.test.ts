@@ -256,6 +256,43 @@ describe('Client.checkForUpdates', () => {
     }
   });
 
+  it('sends downloadToken as X-Download-Token and skips the edge', async () => {
+    let edgeCalled = false;
+    const edgeServer = await createTestServer((_, res) => {
+      edgeCalled = true;
+      writeJSON(res, { update_available: false });
+    });
+
+    const apiServer = await createTestServer((req, res) => {
+      expect(req.headers['x-download-token']).toBe('fnd_token');
+      writeJSON(res, { update_available: true, update_url: 'https://downloads.example/app' });
+    });
+
+    try {
+      const client = new Client({ baseURL: apiServer.url, edgeURL: edgeServer.url });
+      const resp = await client.checkForUpdates({ ...defaultOptions(), downloadToken: 'fnd_token' });
+      expect(resp.source).toBe('api');
+      expect(resp.updateAvailable).toBe(true);
+      expect(edgeCalled).toBe(false);
+    } finally {
+      await Promise.all([edgeServer.close(), apiServer.close()]);
+    }
+  });
+
+  it('omits X-Download-Token when downloadToken is absent', async () => {
+    const server = await createTestServer((req, res) => {
+      expect(req.headers['x-download-token']).toBeUndefined();
+      writeJSON(res, { update_available: false });
+    });
+
+    try {
+      const client = new Client({ baseURL: server.url });
+      await client.checkForUpdates(defaultOptions());
+    } finally {
+      await server.close();
+    }
+  });
+
   it('falls back from edge 404 to API', async () => {
     const edgeServer = await createTestServer((_, res) => {
       res.writeHead(404);

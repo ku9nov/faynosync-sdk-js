@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+### Added
+
+- `downloadToken` in `CheckOptions` for private apps whose download mode is `strict`: the SDK sends it as the `X-Download-Token` header, and such an app answers a check without it exactly as it answers a check for an unknown app. The token is scoped to one app and channel.
+- `DOWNLOAD_TOKEN_HEADER` for applications that fetch the artifact themselves.
+
+### Changed
+
+- `edgeURL` is skipped when `downloadToken` is set. A private app is never published to the edge, so the lookup could only miss and cost a request.
+
 ## 0.6.0
 
 ### Added

@@ -1,4 +1,4 @@
-export { Client } from './client';
+export { Client, DOWNLOAD_TOKEN_HEADER } from './client';
 export type { Config } from './client';
 export type {
   CheckOptions,

@@ -15,6 +15,9 @@ export interface CheckOptions {
   readonly platform?: string;
   readonly arch?: string;
   readonly deviceId?: string;
+  // Download token of a private app in strict mode, scoped to one app and channel. Such an app answers a
+  // check without it exactly as it answers a check for an unknown app.
+  readonly downloadToken?: string;
 }
 
 export type NativeUpdater = 'squirrel_darwin' | 'squirrel_windows';

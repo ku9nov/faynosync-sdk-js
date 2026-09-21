@@ -87,6 +87,10 @@ The SDK only validates `owner`, `appName`, and `version` as required. `channel`,
 
 `deviceId` is optional. When set, the SDK sends it as the `X-Device-ID` header and triggers a telemetry beacon after a successful edge response.
 
+`downloadToken` is needed only for a private app in `strict` mode. The SDK sends it as the `X-Download-Token` header; such an app answers a check without it exactly as it answers a check for an unknown app. The token is scoped to one app and channel. When `downloadToken` is set, `edgeURL` is skipped: a private app is never published to the edge, so the lookup could only miss.
+
+If your application downloads the artifact itself, send the same header to the `/download` link (the name is exported as `DOWNLOAD_TOKEN_HEADER`). `/download` answers with a redirect to presigned storage, and `fetch` forwards custom headers across hosts, so request it with `redirect: 'manual'` and fetch the `Location` URL without the header — otherwise the token reaches the storage provider and its access logs.
+
 The SDK always uses the `manual` updater: it sends `updater=manual` on the `baseURL` API request and uses `manual` as the edge path segment. This is the native faynoSync response that carries the full metadata (`critical`, `changelog`, `is_intermediate_required`, `possible_rollback`) and the per-package URLs (`update_url_yml`, `update_url_zip`, `update_url_dmg`). Framework-specific updater modes (e.g. `electron-builder`) return their own feed format and are meant to be consumed directly by that framework — point it at the `update_url_yml` from `packageUrls` instead.
 
 An optional `AbortSignal` can be passed as the second argument to cancel the request:
@@ -231,6 +235,7 @@ The `baseURL` API request uses `GET /checkVersion`:
 ```
 GET /checkVersion?app_name=test&version=0.0.0.5&channel=nightly&platform=darwin&arch=arm64&owner=admin&updater=manual
 X-Device-ID: optional
+X-Download-Token: optional
 ```
 
 ## Response Model
@@ -403,6 +408,7 @@ Runnable examples are available in:
 - [`examples/basic`](examples/basic) — minimal setup using runtime platform/arch detection
 - [`examples/edge-fallback`](examples/edge-fallback) — `edgeURL` configured with `deviceId` telemetry
 - [`examples/custom-fetch`](examples/custom-fetch) — custom `fetch` function and `timeoutMs`
+- [`examples/private-app`](examples/private-app) — `downloadToken` for a `strict` private app and a download that keeps the token out of storage requests
 
 Run any example with:
 

@@ -103,6 +103,32 @@ describe('Client.checkForUpdates', () => {
     }
   });
 
+  it.each([
+    ['no arch', { arch: undefined }, '/responses/admin/test/nightly/darwin/manual/0.0.0.5.json'],
+    ['no platform drops the updater segment', { platform: undefined }, '/responses/admin/test/nightly/arm64/0.0.0.5.json'],
+    ['no platform and arch', { platform: undefined, arch: undefined }, '/responses/admin/test/nightly/0.0.0.5.json'],
+  ])('matches the server object key with %s', async (_, overrides: Partial<CheckOptions>, wantPath) => {
+    const apiServer = await createTestServer((_, res) => {
+      res.writeHead(500);
+      res.end();
+    });
+
+    let edgePath = '';
+    const edgeServer = await createTestServer((req, res) => {
+      edgePath = new URL(req.url!, `http://${req.headers.host}`).pathname;
+      writeJSON(res, { update_available: false });
+    });
+
+    try {
+      const client = new Client({ baseURL: apiServer.url, edgeURL: edgeServer.url });
+      const resp = await client.checkForUpdates({ ...defaultOptions(), ...overrides });
+      expect(edgePath).toBe(wantPath);
+      expect(resp.source).toBe('edge');
+    } finally {
+      await Promise.all([apiServer.close(), edgeServer.close()]);
+    }
+  });
+
   it('sends telemetry beacon to base API after edge success', async () => {
     let apiCalled = false;
     let telemetryCalled = false;

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+### Fixed
+
+- Edge path matches the server's object key: empty `channel`/`platform`/`arch` skipped.
+
 ## 0.7.0
 
 ### Added

@@ -327,14 +327,15 @@ export class Client {
 
   private buildEdgeResponseURL(opts: CheckOptions, updater: string): string {
     const u = parseAbsoluteURL(this.edgeURL, ErrInvalidEdgeURL);
+    // Mirrors the server's CDN object key: empty dimensions are left out, and without a
+    // platform the server resolves no updater, so that segment is dropped as well.
+    const platform = opts.platform ?? '';
+    const dimensions = [opts.channel ?? '', platform, opts.arch ?? '', platform === '' ? '' : updater];
     const segments = [
       'responses',
       opts.owner,
       opts.appName,
-      opts.channel ?? '',
-      opts.platform ?? '',
-      opts.arch ?? '',
-      updater,
+      ...dimensions.filter((segment) => segment !== ''),
       `${opts.version.replace(/-/g, '.')}.json`,
     ];
     const base = (u.origin + u.pathname).replace(/\/+$/, '');

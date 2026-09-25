@@ -289,11 +289,13 @@ When `edgeURL` is configured, the SDK first tries a static JSON response:
 GET /responses/{owner}/{appName}/{channel}/{platform}/{arch}/manual/{version}.json
 ```
 
-The updater segment is always `manual`:
+For example:
 
 ```
 GET /responses/admin/test/nightly/darwin/arm64/manual/0.0.0.5.json
 ```
+
+Empty `channel`, `platform` and `arch` are left out of the path, and the `manual` segment is dropped when `platform` is empty, matching the object key the server writes.
 
 If the edge response succeeds with HTTP 200 and valid JSON, `resp.source` is `'edge'`.
 

@@ -371,7 +371,8 @@ export class Client {
     const reqSignal = createRequestSignal(signal, this.timeoutMs);
     const res = await this.fetchFn(url, { headers, signal: reqSignal });
     await res.body?.cancel();
-    if (res.status !== 200) {
+    // The server answers the beacon with 204 No Content.
+    if (!res.ok) {
       throw new EndpointError('edge', url, res.status);
     }
   }

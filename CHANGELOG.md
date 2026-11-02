@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+### Fixed
+
+- Edge telemetry beacon accepts any 2xx. The server answers it with `204 No Content`, which was reported as an `EndpointError`.
+
 ## 0.8.0
 
 ### Fixed

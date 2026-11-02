@@ -282,6 +282,22 @@ describe('Client.checkForUpdates', () => {
     }
   });
 
+  it.each([200, 204])('treats telemetry beacon %i response as success', async (status) => {
+    const apiServer = await createTestServer((_, res) => {
+      res.writeHead(status);
+      res.end();
+    });
+
+    try {
+      const client = new Client({ baseURL: apiServer.url, edgeURL: apiServer.url });
+      await expect(
+        client['sendEdgeTelemetryBeacon']({ ...defaultOptions(), deviceId: 'device-1' }, true, null),
+      ).resolves.toBeUndefined();
+    } finally {
+      await apiServer.close();
+    }
+  });
+
   it('sends downloadToken as X-Download-Token and skips the edge', async () => {
     let edgeCalled = false;
     const edgeServer = await createTestServer((_, res) => {
